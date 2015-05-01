@@ -54,9 +54,23 @@
     (let [[n nseq nrest] (pull-name s)
           [a aseq arest] (pull-attr-no nrest)
           [attr attr-seq attr-rest] (reduce (fn [[m acc s] _] (pull-name-value m acc s)) [{} [] arest] (range 0 a))]
-      [n nseq a aseq attr attr-seq attr-rest])))
+      [s n (concat nseq aseq attr-seq) attr-rest])))
 
 
+(defn merger [seqs]
+  (let [mgr (fn []
+              (when-let [[f & r] (->> (map pull-obj seqs) (filter identity) (sort-by second) seq)]
+                (do (println (second f)) (merger (conj (map first r) (last f))))))]
+    mgr))
+
+
+(def files ["/Users/subhash/Downloads/table1" "/Users/subhash/Downloads/table2" "/Users/subhash/Downloads/table3"])
+
+(let [mgr (merger (map (comp byte-seq input-stream file) (reverse files)))]
+  (trampoline mgr))
+
+
+ (-> ((comp byte-seq input-stream file) (first files)) pull-obj last pull-obj last pull-obj last pull-obj)
 
 (defn merge-seq [a b acc]
   (let [[an anseq aa aaseq aattr aattr-seq arest] (pull-obj a)
@@ -71,6 +85,7 @@
      1)))
 
 
+(->> [[1 2 3] [4 5 6] [7 9]] (vector :begin))
 
 
 
