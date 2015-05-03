@@ -2,6 +2,7 @@
 (require '[clojure.java.io :refer [file output-stream input-stream reader]])
 
 (import '[java.nio ByteBuffer])
+(import '[java.nio ByteOrder])
 
 (def in (input-stream (file "/Users/subhash/Downloads/table1")))
 
@@ -10,11 +11,14 @@
 (defn byte-seq [in]
   (take-while (partial <= 0) (repeatedly #(.read in))))
 
+
 (defn bytes->int [b]
   (-> (map byte b) (byte-array) (biginteger)))
 
 (defn int->bytes [i]
-  (-> (biginteger i) (.toByteArray)))
+  (let [s (-> (biginteger i) .toByteArray seq)]
+    (byte-array (concat (repeat (- 8 (count s)) 0) s))))
+
 
 (defn bytes->string [b]
   (->> (map char b) (apply str)))
@@ -46,16 +50,22 @@
                 (obj-iter vrest))})))
 
 
-(defn merge-attr [iters obj-iters]
+(defn merge-attr [iters obj-iters acc out]
   (let [[attrs objs] (->> (map #(%) iters) (filter identity) (sort-by :type) (split-with #(= (:type %) :attr)))]
     (if (seq attrs)
       (let [sorted (sort-by :key attrs)
-            [now later] (split-with #(= (-> sorted first :key) (% :key)) sorted)]
-        (println "merged attr - " (:key (first now)) (:val (first now )))
+            [now later] (split-with #(= (-> sorted first :key) (% :key)) sorted)
+            selected (first now)]
         #(merge-attr
-          (concat [(:next (first now))] (map :prev later))
-          (concat obj-iters (map :prev objs))))
-      #(merge-obj (concat obj-iters (map :prev objs))))))
+          (concat [(:next selected)] (map :prev later))
+          (concat obj-iters (map :prev objs))
+          (conj acc selected)
+          out))
+      (do
+        (println "merged attrs - " (count acc) (map :key acc))
+        (.write out (int->bytes (count acc)))
+        (doseq [a acc] (.write out (byte-array (:seq a))))
+        #(merge-obj (concat obj-iters (map :prev objs)) out)))))
 
 
 (defn obj-iter [s]
@@ -64,18 +74,28 @@
           [a aseq arest] (pull-int nrest)]
       {:type :obj
        :name n
-       :seq (concat nseq aseq)
+       :seq nseq
        :next (attr-iter arest a)
        :prev (obj-iter s)})))
 
 
-(defn merge-obj [iters]
+(defn merge-obj [iters out]
   (when (seq iters)
     (let [objs (->> (map #(%) iters) (filter identity) (sort-by :name))
-          [now later] (split-with #(= (-> objs first :name) (% :name)) objs)]
-      (println "merged obj - " (-> objs first :name))
-      #(merge-attr (map :next now) (map :prev later)))))
+          [now later] (split-with #(= (-> objs first :name) (% :name)) objs)
+          selected (first now)]
+      (println "merged obj - " (:name selected))
+      (.write out (byte-array (:seq selected)))
+      #(merge-attr (map :next now) (map :prev later) [] out))))
 
 (def prep (comp obj-iter byte-seq input-stream file))
 
-(trampoline (merge-obj (map prep files)))
+
+(spit "/tmp/see" "")
+(with-open [out (java.io.FileOutputStream. "/tmp/see")]
+  (trampoline (merge-obj (map prep files) out)))
+(slurp "/tmp/see")
+
+
+
+
