@@ -1,7 +1,31 @@
 (ns binmerge.core-test
   (:require [clojure.test :refer :all]
-            [binmerge.core :refer :all]))
+            [binmerge.core :refer :all]
+            [clojure.java.io :refer [file output-stream input-stream reader]]))
 
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+(def table1 "resources/data/table1")
+(def table2 "resources/data/table2")
+(def table3 "resources/data/table3")
+(def output "resources/data/output")
+(def test-output "resources/data/test-output")
+
+(defn same-content [files]
+  (->> (map (comp byte-seq input-stream file) files)
+       (apply =)))
+
+(deftest given-test
+  (testing "Given test - merge table1, table2 and table3 to output"
+    (let [inputs [table1 table2 table3]]
+      (spit test-output "")
+      (merge-bin inputs test-output)
+      (is (same-content [test-output output])))))
+
+
+(deftest degenerate-tests
+  (testing "Degenerate test cases"
+    (spit test-output "")
+    (merge-bin [table1] test-output)
+    (is (same-content [test-output table1]))
+    (spit test-output "")
+    (merge-bin [table2 table2] test-output)
+    (is (same-content [test-output table2]))))
