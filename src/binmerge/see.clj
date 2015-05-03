@@ -47,24 +47,21 @@
 
 
 (defn merge-attr [iters obj-iters]
-  (let [[apulls opulls] (->> (map #(%) iters) (filter identity) (sort-by :type) (split-with #(= (:type %) :attr)))]
-    (if (seq apulls)
-      (let [pulls (sort-by :key apulls)
-            [f r] (split-with #(= (-> pulls first :key) (% :key)) pulls)
-            foo (println "merged attr - " (:key (first f)) (:val (first f )))
-            merged [(:next (first f))]
-            unmerged (map :prev r)]
+  (let [[attrs objs] (->> (map #(%) iters) (filter identity) (sort-by :type) (split-with #(= (:type %) :attr)))]
+    (if (seq attrs)
+      (let [sorted (sort-by :key attrs)
+            [now later] (split-with #(= (-> sorted first :key) (% :key)) sorted)]
+        (println "merged attr - " (:key (first now)) (:val (first now )))
         #(merge-attr
-          (concat merged unmerged)
-          (concat obj-iters (map :prev opulls))))
-      #(merge-obj (concat obj-iters (map :prev opulls))))))
+          (concat [(:next (first now))] (map :prev later))
+          (concat obj-iters (map :prev objs))))
+      #(merge-obj (concat obj-iters (map :prev objs))))))
 
 
 (defn obj-iter [s]
   #(when (seq s)
      (let [[n nseq nrest] (pull-string s)
-          [a aseq arest] (pull-int nrest)
-           ]
+          [a aseq arest] (pull-int nrest)]
       {:type :obj
        :name n
        :seq (concat nseq aseq)
@@ -72,18 +69,12 @@
        :prev (obj-iter s)})))
 
 
-
 (defn merge-obj [iters]
   (when (seq iters)
-    (let [pulls (->> (map #(%) iters) (filter identity) (sort-by :name))
-          [f r] (split-with #(= (-> pulls first :name) (% :name)) pulls)
-          foo (println "merged obj - " (-> pulls first :name))
-          merged (->> (map :next f) )
-          unmerged (->> (map :prev r))
-          ]
-      #(merge-attr merged unmerged)
-
-    )))
+    (let [objs (->> (map #(%) iters) (filter identity) (sort-by :name))
+          [now later] (split-with #(= (-> objs first :name) (% :name)) objs)]
+      (println "merged obj - " (-> objs first :name))
+      #(merge-attr (map :next now) (map :prev later)))))
 
 (def prep (comp obj-iter byte-seq input-stream file))
 
