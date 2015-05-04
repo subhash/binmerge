@@ -71,15 +71,15 @@
 
 (deftest test-merge-order
   (testing "Merge should preserve ASCII order"
-    (let [o [{:name "o1" :attr [["age" "20"]]}
+    (let [o [{:name "o0" :attr [["age" "20"]]}
+             {:name "o1" :attr [["age" "20"]]}
              {:name "o2" :attr [["age" "20"]]}
              {:name "o3" :attr [["age" "20"]]}
-             {:name "o4" :attr [["age" "20"]]}
-             {:name "o5" :attr [["age" "20"]]}]]
+             {:name "o4" :attr [["age" "20"]]}]]
       (for [f [sample-a sample-b test-output]] (spit f ""))
-        (with-open [out (java.io.FileOutputStream. sample-a)]
-          (map #(obj->bin (nth o %) out) [2 3]))
-        (with-open [out (java.io.FileOutputStream. sample-b)]
-          (map #(obj->bin (nth o %) out) [1 4 5]))
-        (merge-bin [sample-a sample-b] test-output)
-        (is (= o (bin->objs test-output))))))
+      (with-open [out (java.io.FileOutputStream. sample-a)]
+        (doseq [i [1 4]] (obj->bin (nth o i) out)))
+      (with-open [out (java.io.FileOutputStream. sample-b)]
+        (doseq [i [0 2 3]] (obj->bin (nth o i) out)))
+      (merge-bin [sample-a sample-b] test-output)
+      (is (= o (bin->objs test-output))))))
