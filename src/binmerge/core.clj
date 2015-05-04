@@ -1,10 +1,6 @@
 (ns binmerge.core
   (:require [clojure.java.io :refer [file output-stream input-stream reader]]))
 
-(def in (input-stream (file "/Users/subhash/Downloads/table1")))
-
-(def files ["/Users/subhash/Downloads/table1" "/Users/subhash/Downloads/table2" "/Users/subhash/Downloads/table3"])
-
 (defn byte-seq [in]
   (take-while (partial <= 0) (repeatedly #(.read in))))
 
@@ -15,9 +11,13 @@
   (let [s (-> (biginteger i) .toByteArray seq)]
     (byte-array (concat (repeat (- 8 (count s)) 0) s))))
 
-
 (defn bytes->string [b]
   (->> (map char b) (apply str)))
+
+(defn string->bytes [s]
+  (-> (map byte s) byte-array))
+
+(type (string->bytes "foo"))
 
 (defn pull-string [s]
   (let [[xseq xrest] (split-at 8 s)
@@ -46,7 +46,6 @@
                 (attr-iter vrest (dec n))
                 (obj-iter vrest))})))
 
-
 (declare merge-obj)
 
 (defn merge-attr [iters obj-iters acc out]
@@ -73,10 +72,24 @@
           [a aseq arest] (pull-int nrest)]
       {:type :obj
        :name n
+       :attr-no a
        :seq nseq
        :next (attr-iter arest a)
        :prev (obj-iter s)})))
 
+(defn full-obj-iter [s]
+  #(when (seq s)
+     (let [[n _ nrest] (pull-string s)
+          [a _ arest] (pull-int nrest)
+          [attr onext] (reduce
+                    (fn [[acc aseq] _]
+                       (let [[k _ krest] (pull-string aseq)
+                             [v _ vrest] (pull-string krest)]
+                         [(conj acc [k v]) vrest]))
+                    [[] arest]
+                    (range 0 a))]
+      {:obj {:name n :attr attr}
+       :next (full-obj-iter onext)})))
 
 (defn merge-obj [iters out]
   (when (seq iters)
@@ -93,10 +106,31 @@
       (trampoline (merge-obj iters out)))))
 
 
-;(spit "/tmp/see" "")
-;(with-open [out (java.io.FileOutputStream. "/tmp/see")]
-;  (trampoline (merge-obj (map prep files) out)))
-;(slurp "/tmp/see")
+(defn obj->bin [{:keys [name attr]} out]
+  (do
+    (doto out
+      (.write (int->bytes (count name)))
+      (.write (string->bytes name))
+      (.write (int->bytes (count attr))))
+    (doseq [[an av] attr]
+      (doto out
+        (.write (int->bytes (count an)))
+        (.write (string->bytes an))
+        (.write (int->bytes (count av)))
+        (.write (string->bytes av))))))
+
+
+(defn bin->objs [f]
+  (->> ((full-obj-iter ((comp byte-seq input-stream file) f)))
+       (iterate (fn [o] ((:next o))))
+       (take-while (comp not nil?))
+       (map :obj)))
+
+
+(let [[n v] (seq {1 2})] n)
+
+
+
 
 
 

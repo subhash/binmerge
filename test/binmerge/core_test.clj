@@ -9,6 +9,10 @@
 (def output "resources/data/output")
 (def test-output "resources/data/test-output")
 
+(def sample-a "resources/data/a")
+(def sample-b "resources/data/b")
+
+
 (defn same-content [files]
   (->> (map (comp byte-seq input-stream file) files)
        (apply =)))
@@ -20,7 +24,6 @@
       (merge-bin inputs test-output)
       (is (same-content [test-output output])))))
 
-
 (deftest degenerate-tests
   (testing "Degenerate test cases"
     (spit test-output "")
@@ -29,3 +32,39 @@
     (spit test-output "")
     (merge-bin [table2 table2] test-output)
     (is (same-content [test-output table2]))))
+
+(deftest test-marshalling
+  (let [a {:name "a" :attr [["age" "20"]]}]
+    (spit sample-a "")
+    (testing "Testing obj->bin"
+      (with-open [out (java.io.FileOutputStream. sample-a)]
+        (obj->bin a out)))
+    (testing "Testing bin->objs"
+      (is (= [a] (bin->objs sample-a))))))
+
+(deftest test-basic-merge
+  (testing "Testing merge"
+    (let [a {:name "a" :attr [["age" "20"]]}
+          b {:name "b" :attr [["occupation" "programmer"]]}]
+      (for [f [sample-a sample-b test-output]] (spit f ""))
+        (with-open [out (java.io.FileOutputStream. sample-a)]
+          (obj->bin a out))
+        (with-open [out (java.io.FileOutputStream. sample-b)]
+          (obj->bin b out))
+        (merge-bin [sample-a sample-b] test-output)
+        (is (= [a b] (bin->objs test-output))))))
+
+(deftest test-object-merge
+  (testing "Duplicate objects should merge into one"
+    (let [a {:name "a" :attr [["age" "20"]]}
+          dup-a {:name "a" :attr [["occupation" "artist"]]}
+          b {:name "b" :attr [["occupation" "programmer"]]}
+          merged-a (assoc a :attr (concat (:attr a) (:attr dup-a)))]
+      (for [f [sample-a sample-b test-output]] (spit f ""))
+        (with-open [out (java.io.FileOutputStream. sample-a)]
+          (obj->bin a out))
+        (with-open [out (java.io.FileOutputStream. sample-b)]
+          (obj->bin dup-a out)
+          (obj->bin b out))
+        (merge-bin [sample-a sample-b] test-output)
+        (is (= [merged-a b] (bin->objs test-output))))))
