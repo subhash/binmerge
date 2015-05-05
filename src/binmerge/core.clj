@@ -145,7 +145,7 @@
               (.read in bval-no 0 8)
               (let [val-no (bytes->int bval-no)]
                 (.read in (byte-array val-no) 0 val-no)))
-            (find-obj search-name in)))))))]
+            (recur search-name in)))))))]
   (find-obj search-name (input-stream  f))))
 
 
