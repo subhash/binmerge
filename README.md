@@ -1,14 +1,16 @@
-# binmerge
+# Binary Merge
 
-A Clojure library designed to ... well, that part is up to you.
+A solution for the Merge problem described [here](https://github.com/faunadb/exercises/blob/master/merge.md)
 
 ## Usage
 
-FIXME
+```bash
+lein test binmerge.core-test
+```
+tests core functionality
 
-## License
+```bash
+lein test binmerge.perf-test
+```
+tests memory profile of execution
 
-Copyright © 2015 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
