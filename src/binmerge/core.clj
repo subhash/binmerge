@@ -127,7 +127,38 @@
        (map :obj)))
 
 
-(nth [1 2 3] 1)
+
+
+
+
+(comment
+  (with-open [out (java.io.FileOutputStream. "resources/data/million_objects")]
+          (doseq [i (range 1000000)]
+            (obj->bin
+             {:name (str "obj" i) :attr [[(str "attr" i) (str "value" i)]]}
+             out)))
+)
+
+
+;(-> "resources/data/million_objects" file input-stream byte-seq )
+
+(comment
+  (let [f (java.io.File. "resources/data/million_objects")
+             ary (byte-array (.length f))
+             is (java.io.FileInputStream. f)]
+         (.read is ary)
+         (.close is)
+         ary)
+
+  )
+
+(repeat 10 3)
+
+;(merge-bin ["resources/data/lots_of_small_objects"] "/tmp/foo")
+
+
+
+
 
 
 
