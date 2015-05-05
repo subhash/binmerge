@@ -203,22 +203,22 @@
 
 
 
-  (defn same-contents? [f1 f2]
-    (let [b1 (byte-array 100)
-          b2 (byte-array 100)
-          r1 (.read f1 b1 0 100)
-          r2 (.read f2 b2 0 100)
-          foo (println r1 r2 (seq b1) (seq b2))]
-      (cond
-       (and (= r1 -1) (= r2 -1)) true
-       (or  (= r1 -1) (= r2 -1)) false
-       (= (seq b1) (seq b2)) (same-contents? f1 f2)
-       :else false
-       )))
+(comment  (defn same-contents? [f1 f2]
+            (let [b1 (byte-array 100)
+                  b2 (byte-array 100)
+                  r1 (.read f1 b1 0 100)
+                  r2 (.read f2 b2 0 100)
+                  foo (println r1 r2 (seq b1) (seq b2))]
+              (cond
+               (and (= r1 -1) (= r2 -1)) true
+               (or  (= r1 -1) (= r2 -1)) false
+               (= (seq b1) (seq b2)) (same-contents? f1 f2)
+               :else false
+               ))))
 
   ;(same-contents? (input-stream "resources/data/table1") (input-stream "resources/data/table1"))
 
-
+(java.util.Date.)
 
 
 
