@@ -83,3 +83,9 @@
         (doseq [i [0 2 3]] (obj->bin (nth o i) out)))
       (merge-bin [sample-a sample-b] test-output)
       (is (= o (bin->objs test-output))))))
+
+(deftest test-find-object
+  (testing "Find object by name"
+    (let [taran {:name "taran":attr [{:key "age", :value "15"} {:key "profession", :value "Pigkeeper"}]}]
+      (is (= taran (find-object "taran" table1)))
+      (is (= nil (find-object "subhash" table1))))))

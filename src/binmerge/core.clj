@@ -106,6 +106,49 @@
       (trampoline (merge-obj iters out)))))
 
 
+(defn find-object [search-name f]
+(letfn
+  [(find-obj [search-name in]
+  (let [bno (byte-array 8)
+        rno (.read in bno 0 8)]
+    (when (> rno -1)
+      (let [no (bytes->int bno)
+            bname (byte-array no)
+            rname (.read in bname 0 no)
+            obj-name (bytes->string bname)
+            battr-no (byte-array 8)
+            rattr-no (.read in battr-no 0 8)
+            attr-no (bytes->int battr-no)
+            bkey-no (byte-array 8)
+            bval-no (byte-array 8)]
+        (if (= obj-name search-name)
+          {:name obj-name
+           :attr
+             (for [i (range attr-no)]
+               (do
+                 (.read in bkey-no 0 8)
+                 (let [key-no (bytes->int bkey-no)
+                       bkey (byte-array key-no)]
+                   (.read in bkey 0 key-no)
+                   (.read in bval-no 0 8)
+                   (let [k (bytes->string bkey)
+                         val-no (bytes->int bval-no)
+                         bval (byte-array val-no)]
+                     (.read in bval 0 val-no)
+                     {:key k :value (bytes->string bval)}))))
+           }
+          (do
+            (dotimes [i attr-no]
+              (.read in bkey-no 0 8)
+              (let [key-no (bytes->int bkey-no)]
+                (.read in (byte-array key-no) 0 key-no))
+              (.read in bval-no 0 8)
+              (let [val-no (bytes->int bval-no)]
+                (.read in (byte-array val-no) 0 val-no)))
+            (find-obj search-name in)))))))]
+  (find-obj search-name (input-stream  f))))
+
+
 (defn obj->bin [{:keys [name attr]} out]
   (do
     (doto out
@@ -140,7 +183,6 @@
 )
 
 
-;(-> "resources/data/million_objects" file input-stream byte-seq )
 
 (comment
   (let [f (java.io.File. "resources/data/million_objects")
@@ -152,10 +194,29 @@
 
   )
 
-(repeat 10 3)
 
-;(merge-bin ["resources/data/lots_of_small_objects"] "/tmp/foo")
 
+
+
+(find-object "taran" "resources/data/table1")
+
+
+
+
+  (defn same-contents? [f1 f2]
+    (let [b1 (byte-array 100)
+          b2 (byte-array 100)
+          r1 (.read f1 b1 0 100)
+          r2 (.read f2 b2 0 100)
+          foo (println r1 r2 (seq b1) (seq b2))]
+      (cond
+       (and (= r1 -1) (= r2 -1)) true
+       (or  (= r1 -1) (= r2 -1)) false
+       (= (seq b1) (seq b2)) (same-contents? f1 f2)
+       :else false
+       )))
+
+  ;(same-contents? (input-stream "resources/data/table1") (input-stream "resources/data/table1"))
 
 
 
