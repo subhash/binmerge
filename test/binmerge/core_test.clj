@@ -19,22 +19,18 @@
 (deftest given-test
   (testing "Given test - merge table1, table2 and table3 to output"
     (let [inputs [table1 table2 table3]]
-      (spit test-output "")
       (merge-bin inputs test-output)
       (is (same-content [test-output output])))))
 
 (deftest degenerate-tests
   (testing "Degenerate test cases"
-    (spit test-output "")
     (merge-bin [table1] test-output)
     (is (same-content [test-output table1]))
-    (spit test-output "")
     (merge-bin [table2 table2] test-output)
     (is (same-content [test-output table2]))))
 
 (deftest test-marshalling
   (let [a {:name "a" :attr [["age" "20"]]}]
-    (spit sample-a "")
     (testing "Testing obj->bin"
       (with-open [out (java.io.FileOutputStream. sample-a)]
         (obj->bin a out)))

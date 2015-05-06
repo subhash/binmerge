@@ -83,7 +83,7 @@
 
 (declare merge-obj)
 
-(defn merge-attr [iters obj-iters pos attr-no out]
+(defn merge-attr [iters obj-iters pos attr-no acc out]
   "Takes a sequence of iterators, iters pointing to each object's attribute list and
   an output stream, out. pos marks the position of no of attributes and attr-no its value:
   1. Move all iterators forward.
@@ -105,18 +105,18 @@
           (concat obj-iters (map :prev objs))
           pos
           (inc attr-no)
+          acc
           out))
       (do
-        (let [chan (.getChannel out)
-              new-pos (.position chan)]
-          (.position chan pos)
-          (.write out (int->bytes attr-no))
-          (.position chan new-pos))
-        #(merge-obj (concat obj-iters (map :prev objs)) out)))))
+        ;(let [new-pos (.getFilePointer out)]
+        ;  (.seek out pos)
+        ;  (.write out (int->bytes attr-no))
+        ;  (.seek out new-pos))
+        #(merge-obj (concat obj-iters (map :prev objs)) (conj acc [pos attr-no]) out)))))
 
 
 
-(defn merge-obj [iters out]
+(defn merge-obj [iters acc out]
   "Takes a sequence of iterators and an output stream and writes objects incrementally
   to the output stream
   1. Move all object iterators forward
@@ -126,14 +126,15 @@
     3.1 'Rewind' the rejected iterators with (:seq i) to point back to their objects
     3.2 Preserve the 'rewinded' iterators in the merge-attr closure for later iteration"
 
-  (when (seq iters)
+  (if (seq iters)
     (let [objs (->> (map #(%) iters) (filter identity) (sort-by :name))
           [now later] (split-with #(= (-> objs first :name) (% :name)) objs)
           selected (first now)]
       (.write out (byte-array (:seq selected)))
       (let [pos (-> out .getChannel .position)]
         (.write out (byte-array 8)) ; placeholder for no of attr
-        #(merge-attr (map :next now) (map :prev later) pos 0 out)))))
+        #(merge-attr (map :next now) (map :prev later) pos 0 acc out)))
+    acc))
 
 
 
@@ -141,12 +142,20 @@
   "Given a sequence of input file paths and an output file path, merge inputs into output
   1. Create files from input file paths and sort them, latest first
   2. Create object iterators from input files
-  3. Use trampoline to keep iterating until the sequences are all done"
+  3. Use trampoline to keep iterating until the sequences are all done
+  4. Write back attribute nos from updates received after iteration"
 
   (let [files (->> inputs (map file) (sort-by #(.lastModified %)) reverse)]
-    (with-open [out (java.io.FileOutputStream. output)]
-      (let [iters (map (comp obj-iter byte-seq input-stream) files)]
-        (trampoline (merge-obj iters out))))))
+    (spit output "")
+    (let
+      [updates
+      (with-open [out (java.io.FileOutputStream. output )]
+        (let [iters (map (comp obj-iter byte-seq input-stream) files)]
+          (trampoline (merge-obj iters [] out))))]
+      (with-open [out (java.io.RandomAccessFile. output "rw")]
+        (doseq [[pos attr-no] updates]
+          (.seek out pos)
+          (.write out (int->bytes attr-no)))))))
 
 
 
