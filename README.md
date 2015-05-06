@@ -23,4 +23,4 @@ tests memory profile of execution
 * Extra credit: The object reader function uses a simple iteration using native byte arrays. It is considered to be performant because: 
   * It reads only as much as is necessary
   * Employs tail-recursion to prevent stack accumulation
-* Extra credit: The merge function iterates over attributes without having the load the entire object into memory. For the purpose of updating the attr no count, it "positions" the output stream backward, updates the count and then continues on
+* Extra credit: The merge function iterates over attributes without having the load the entire object into memory. For the purpose of updating the attr no count, it keeps track of the tuple [position attr-no] and updates the correct attr no after the iteration
