@@ -232,3 +232,20 @@
        (iterate (fn [o] ((:next o))))
        (take-while (comp not nil?))
        (map :obj)))
+
+
+
+(defn mill-attr [out]
+  (do
+    (doto out
+      (.write (int->bytes (count "mill-attr")))
+      (.write (string->bytes "mill-attr"))
+      (.write (int->bytes 1000000)))
+    (doseq [i (range 1000000)]
+      (let [k (str "key-" i)
+            v (str "val-" i)]
+        (doto out
+          (.write (int->bytes (count k)))
+          (.write (string->bytes k))
+          (.write (int->bytes (count v)))
+          (.write (string->bytes v)))))))
