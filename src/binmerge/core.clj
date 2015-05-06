@@ -1,6 +1,9 @@
 (ns binmerge.core
   (:require [clojure.java.io :refer [file output-stream input-stream reader]]))
 
+
+;;; Conversions ;;;
+
 (defn byte-seq [in]
   (take-while (partial <= 0) (repeatedly #(.read in))))
 
@@ -17,7 +20,8 @@
 (defn string->bytes [s]
   (-> (map byte s) byte-array))
 
-(type (string->bytes "foo"))
+
+;;; Iterators ;;;
 
 (defn pull-string [s]
   (let [[xseq xrest] (split-at 8 s)
@@ -34,6 +38,10 @@
 (declare obj-iter)
 
 (defn attr-iter [s n]
+  "Returns an iterator that starts from sequence position s,
+  emits attribute information and the next attribute iterator
+  and so on for n attributes and finally emits an object iterator
+  pointing to the next object"
   #(when (seq s)
      (let [[k kseq krest] (pull-string s)
            [v vseq vrest] (pull-string krest)]
@@ -46,27 +54,9 @@
                 (attr-iter vrest (dec n))
                 (obj-iter vrest))})))
 
-(declare merge-obj)
-
-(defn merge-attr [iters obj-iters acc out]
-  (let [[attrs objs] (->> (map #(%) iters) (filter identity) (sort-by :type) (split-with #(= (:type %) :attr)))]
-    (if (seq attrs)
-      (let [sorted (sort-by :key attrs)
-            [now later] (split-with #(= (-> sorted first :key) (% :key)) sorted)
-            selected (first now)]
-        #(merge-attr
-          (concat [(:next selected)] (map :prev later))
-          (concat obj-iters (map :prev objs))
-          (conj acc selected)
-          out))
-      (do
-        ;(println "merged attrs - " (count acc) (map :key acc))
-        (.write out (int->bytes (count acc)))
-        (doseq [a acc] (.write out (byte-array (:seq a))))
-        #(merge-obj (concat obj-iters (map :prev objs)) out)))))
-
-
 (defn obj-iter [s]
+  "Takes a byte sequence starting from an object and returns an iterator
+  to provide object information and lead on to it's attribute iterator"
   #(when (seq s)
      (let [[n nseq nrest] (pull-string s)
           [a aseq arest] (pull-int nrest)]
@@ -77,26 +67,42 @@
        :next (attr-iter arest a)
        :prev (obj-iter s)})))
 
-(defn full-obj-iter [s]
-  #(when (seq s)
-     (let [[n _ nrest] (pull-string s)
-          [a _ arest] (pull-int nrest)
-          [attr onext] (reduce
-                    (fn [[acc aseq] _]
-                       (let [[k _ krest] (pull-string aseq)
-                             [v _ vrest] (pull-string krest)]
-                         [(conj acc [k v]) vrest]))
-                    [[] arest]
-                    (range 0 a))]
-      {:obj {:name n :attr attr}
-       :next (full-obj-iter onext)})))
+
+
+;;; Merge functions ;;;
+
+(declare merge-obj)
+
+(defn merge-attr [iters obj-iters acc out]
+  "Takes a sequence of iterators, iters pointing to each object's attribute list and
+  an output stream, out. obj-iters and acc serve as accumulators. The steps are:
+  1. Move all iterators forward.
+    1.1 Remove the iterators that have reached the end of their sequence
+    1.2 Seggregate the ones that have passed on to the next object
+  2. Sort based on key and partition the first few that share the 'smallest' key
+  3. Select (arbitrarily) the first attribute from the ones sharing the 'smallest' key
+  4. Repeat the process by moving forward the "
+  (let [[attrs objs] (->> (map #(%) iters) (filter identity) (sort-by :type) (split-with #(= (:type %) :attr)))]
+    (if (seq attrs)
+      (let [sorted (sort-by :key attrs)
+            [now later] (split-with #(= (-> sorted first :key) (% :key)) sorted)
+            selected (first now)]
+        #(merge-attr
+          (concat (map :next now) (map :prev later))
+          (concat obj-iters (map :prev objs))
+          (conj acc selected)
+          out))
+      (do
+        (.write out (int->bytes (count acc)))
+        (doseq [a acc] (.write out (byte-array (:seq a))))
+        #(merge-obj (concat obj-iters (map :prev objs)) out)))))
+
 
 (defn merge-obj [iters out]
   (when (seq iters)
     (let [objs (->> (map #(%) iters) (filter identity) (sort-by :name))
           [now later] (split-with #(= (-> objs first :name) (% :name)) objs)
           selected (first now)]
-      ;(println "merged obj - " (:name selected))
       (.write out (byte-array (:seq selected)))
       #(merge-attr (map :next now) (map :prev later) [] out))))
 
@@ -105,6 +111,8 @@
     (let [iters (map (comp obj-iter byte-seq input-stream file) inputs)]
       (trampoline (merge-obj iters out)))))
 
+
+;;; Object reader ;;;
 
 (defn find-object [search-name f]
 (letfn
@@ -149,6 +157,24 @@
   (find-obj search-name (input-stream  f))))
 
 
+
+;;; Test helpers ;;;
+
+(defn full-obj-iter [s]
+  #(when (seq s)
+     (let [[n _ nrest] (pull-string s)
+          [a _ arest] (pull-int nrest)
+          [attr onext] (reduce
+                    (fn [[acc aseq] _]
+                       (let [[k _ krest] (pull-string aseq)
+                             [v _ vrest] (pull-string krest)]
+                         [(conj acc [k v]) vrest]))
+                    [[] arest]
+                    (range 0 a))]
+      {:obj {:name n :attr attr}
+       :next (full-obj-iter onext)})))
+
+
 (defn obj->bin [{:keys [name attr]} out]
   (do
     (doto out
@@ -168,60 +194,3 @@
        (iterate (fn [o] ((:next o))))
        (take-while (comp not nil?))
        (map :obj)))
-
-
-
-
-
-
-(comment
-  (with-open [out (java.io.FileOutputStream. "resources/data/million_objects")]
-          (doseq [i (range 1000000)]
-            (obj->bin
-             {:name (str "obj" i) :attr [[(str "attr" i) (str "value" i)]]}
-             out)))
-)
-
-
-
-(comment
-  (let [f (java.io.File. "resources/data/million_objects")
-             ary (byte-array (.length f))
-             is (java.io.FileInputStream. f)]
-         (.read is ary)
-         (.close is)
-         ary)
-
-  )
-
-
-
-
-
-(find-object "taran" "resources/data/table1")
-
-
-
-
-(comment  (defn same-contents? [f1 f2]
-            (let [b1 (byte-array 100)
-                  b2 (byte-array 100)
-                  r1 (.read f1 b1 0 100)
-                  r2 (.read f2 b2 0 100)
-                  foo (println r1 r2 (seq b1) (seq b2))]
-              (cond
-               (and (= r1 -1) (= r2 -1)) true
-               (or  (= r1 -1) (= r2 -1)) false
-               (= (seq b1) (seq b2)) (same-contents? f1 f2)
-               :else false
-               ))))
-
-  ;(same-contents? (input-stream "resources/data/table1") (input-stream "resources/data/table1"))
-
-(java.util.Date.)
-
-
-
-
-
-

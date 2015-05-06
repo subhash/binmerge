@@ -84,6 +84,18 @@
       (merge-bin [sample-a sample-b] test-output)
       (is (= o (bin->objs test-output))))))
 
+(deftest test-attr-conflict
+  (testing "Merge should resolve conflicted attributes"
+    (let [a1 {:name "a" :attr [["attr1" "val1"] ["attr3" "val3"]]}
+          a2 {:name "a" :attr [["attr1" "conflict-val1"] ["attr2" "val2"]]}
+          merged-a {:name "a" :attr [["attr1" "val1"] ["attr2" "val2"] ["attr3" "val3"]]}]
+      (with-open [out (java.io.FileOutputStream. sample-a)]
+        (obj->bin a1 out))
+      (with-open [out (java.io.FileOutputStream. sample-b)]
+        (obj->bin a2 out))
+      (merge-bin [sample-a sample-b] test-output)
+      (is (= [merged-a] (bin->objs test-output))))))
+
 (deftest test-find-object
   (testing "Find object by name"
     (let [taran {:name "taran":attr [{:key "age", :value "15"} {:key "profession", :value "Pigkeeper"}]}]
