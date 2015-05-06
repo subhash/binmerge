@@ -41,7 +41,12 @@
   "Returns an iterator that starts from sequence position s,
   emits attribute information and the next attribute iterator
   and so on for n attributes and finally emits an object iterator
-  pointing to the next object"
+  pointing to the next object
+
+  :next advances the iterator
+  :prev rewinds the iterator
+  :seq returns the byte seq iterated over"
+
   #(when (seq s)
      (let [[k kseq krest] (pull-string s)
            [v vseq vrest] (pull-string krest)]
@@ -56,7 +61,12 @@
 
 (defn obj-iter [s]
   "Takes a byte sequence starting from an object and returns an iterator
-  to provide object information and lead on to it's attribute iterator"
+  to provide object information and lead on to it's attribute iterator
+
+  :next advances the iterator
+  :prev rewinds the iterator
+  :seq returns the byte seq iterated over"
+
   #(when (seq s)
      (let [[n nseq nrest] (pull-string s)
           [a aseq arest] (pull-int nrest)]
@@ -81,7 +91,9 @@
     1.2 Seggregate the ones that have passed on to the next object
   2. Sort based on key and partition the first few that share the 'smallest' key
   3. Select (arbitrarily) the first attribute from the ones sharing the 'smallest' key
-  4. Repeat the process by moving forward the "
+  4. Repeat the process by moving forward the rest of the iterators
+  5. When only object iterators remain, we return a merge function for those iterators"
+
   (let [[attrs objs] (->> (map #(%) iters) (filter identity) (sort-by :type) (split-with #(= (:type %) :attr)))]
     (if (seq attrs)
       (let [sorted (sort-by :key attrs)
@@ -98,7 +110,17 @@
         #(merge-obj (concat obj-iters (map :prev objs)) out)))))
 
 
+
 (defn merge-obj [iters out]
+  "Takes a sequence of iterators and an output stream and writes objects incrementally
+  to the output stream
+  1. Move all object iterators forward
+    1.1 Get rid of iterators that have reached the end of their sequences
+  2. Sort based on name and partition into two groups - one with the 'smallest' name and without
+  3. Pass on the selected iterators to merge-attr in order to merge their attributes together
+    3.1 'Rewind' the rejected iterators with (:seq i) to point back to their objects
+    3.2 Preserve the 'rewinded' iterators in the merge-attr closure for later iteration"
+
   (when (seq iters)
     (let [objs (->> (map #(%) iters) (filter identity) (sort-by :name))
           [now later] (split-with #(= (-> objs first :name) (% :name)) objs)
@@ -106,15 +128,31 @@
       (.write out (byte-array (:seq selected)))
       #(merge-attr (map :next now) (map :prev later) [] out))))
 
+
+
 (defn merge-bin [inputs output]
+  "Given a sequence of input file paths and an output file path, merge inputs into output
+  1. Create object iterators from input file paths
+  2. Use trampoline to keep iterating until the sequences are all done"
+
   (with-open [out (java.io.FileOutputStream. output)]
     (let [iters (map (comp obj-iter byte-seq input-stream file) inputs)]
       (trampoline (merge-obj iters out)))))
 
 
+
 ;;; Object reader ;;;
 
 (defn find-object [search-name f]
+  "Given a name and an input file path, search for an object with the name in the file
+  1. Read name and check match
+    1.1 If matched, read no of attr
+    1.2 for attr-no times, read key value pair and interpret to strings
+    1.3 Return object
+  2. If name does not match
+    2.1 for attr-no times, read key value pair, but do not interpret
+    2.2 Repeat search with the advanced input stream"
+
 (letfn
   [(find-obj [search-name in]
   (let [bno (byte-array 8)

@@ -12,7 +12,6 @@
 (def sample-a "resources/data/a")
 (def sample-b "resources/data/b")
 
-
 (defn same-content [files]
   (->> (map (comp byte-seq input-stream file) files)
        (apply =)))
