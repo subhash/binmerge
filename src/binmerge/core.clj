@@ -90,7 +90,7 @@
     1.1 Remove the iterators that have reached the end of their sequence
     1.2 Seggregate the ones that have passed on to the next object
   2. Sort based on key and partition the first few that share the 'smallest' key
-  3. Select (arbitrarily) the first attribute from the ones sharing the 'smallest' key
+  3. Select the first attribute, and therefore the latest from the ones sharing the 'smallest' key
   4. Repeat the process by moving forward the rest of the iterators
   5. When only object iterators remain, we return a merge function for those iterators"
 
@@ -139,12 +139,14 @@
 
 (defn merge-bin [inputs output]
   "Given a sequence of input file paths and an output file path, merge inputs into output
-  1. Create object iterators from input file paths
-  2. Use trampoline to keep iterating until the sequences are all done"
+  1. Create files from input file paths and sort them, latest first
+  2. Create object iterators from input files
+  3. Use trampoline to keep iterating until the sequences are all done"
 
-  (with-open [out (java.io.FileOutputStream. output)]
-    (let [iters (map (comp obj-iter byte-seq input-stream file) inputs)]
-      (trampoline (merge-obj iters out)))))
+  (let [files (->> inputs (map file) (sort-by #(.lastModified %)) reverse)]
+    (with-open [out (java.io.FileOutputStream. output)]
+      (let [iters (map (comp obj-iter byte-seq input-stream) files)]
+        (trampoline (merge-obj iters out))))))
 
 
 
@@ -270,5 +272,4 @@
 
 
 
-(test-os "/tmp/see")
-
+(reverse (sort-by #(.lastModified %) (map file ["resources/data/table2" "resources/data/table1" "resources/data/table3" "/tmp/see"])))

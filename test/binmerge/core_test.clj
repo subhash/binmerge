@@ -84,10 +84,10 @@
       (is (= o (bin->objs test-output))))))
 
 (deftest test-attr-conflict
-  (testing "Merge should resolve conflicted attributes and preserve order"
+  (testing "Merge should resolve conflicted attributes by last modified and preserve order"
     (let [a1 {:name "a" :attr [["attr1" "val1"] ["attr3" "val3"]]}
-          a2 {:name "a" :attr [["attr1" "conflict-val1"] ["attr2" "val2"]]}
-          merged-a {:name "a" :attr [["attr1" "val1"] ["attr2" "val2"] ["attr3" "val3"]]}]
+          a2 {:name "a" :attr [["attr1" "overriden-val1"] ["attr2" "val2"]]}
+          merged-a {:name "a" :attr [["attr1" "overriden-val1"] ["attr2" "val2"] ["attr3" "val3"]]}]
       (with-open [out (java.io.FileOutputStream. sample-a)]
         (obj->bin a1 out))
       (with-open [out (java.io.FileOutputStream. sample-b)]
