@@ -34,13 +34,11 @@
 (deftest test-attr-iteration
   (testing "20 million attributes don't fit in memory"
     (println "Trying to load 20 objects with a million attrs each" (java.util.Date.))
-    ;(is (thrown?
-    ;     OutOfMemoryError
-    ;     (doall (map slurp (repeat 20 million-attributes)))))
-    )
-    (testing "20 million attributes merged in memory"
+     (is (thrown?
+          OutOfMemoryError
+          (doall (map slurp (repeat 20 million-attributes))))))
+  (testing "20 million attributes merged in memory"
     (println "Trying to merge 20 million attrs" (java.util.Date.))
     (merge-bin (repeat 20 million-attributes) perf-output)
     (println "Checking same content" (java.util.Date.))
-    (is (same-content? (input-stream perf-output) (input-stream million-attributes))))
-  )
+    (is (same-content? (input-stream perf-output) (input-stream million-attributes)))))

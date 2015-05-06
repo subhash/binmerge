@@ -83,7 +83,7 @@
 
 (declare merge-obj)
 
-(defn merge-attr [iters obj-iters pos attr-no acc out]
+(defn merge-attr [iters obj-iters attr-no-pos attr-no attr-no-acc out]
   "Takes a sequence of iterators, iters pointing to each object's attribute list and
   an output stream, out. pos marks the position of no of attributes and attr-no its value:
   1. Move all iterators forward.
@@ -103,20 +103,16 @@
         #(merge-attr
           (concat (map :next now) (map :prev later))
           (concat obj-iters (map :prev objs))
-          pos
+          attr-no-pos
           (inc attr-no)
-          acc
+          attr-no-acc
           out))
       (do
-        ;(let [new-pos (.getFilePointer out)]
-        ;  (.seek out pos)
-        ;  (.write out (int->bytes attr-no))
-        ;  (.seek out new-pos))
-        #(merge-obj (concat obj-iters (map :prev objs)) (conj acc [pos attr-no]) out)))))
+        #(merge-obj (concat obj-iters (map :prev objs)) (conj attr-no-acc [attr-no-pos attr-no]) out)))))
 
 
 
-(defn merge-obj [iters acc out]
+(defn merge-obj [iters attr-no-acc out]
   "Takes a sequence of iterators and an output stream and writes objects incrementally
   to the output stream
   1. Move all object iterators forward
@@ -131,10 +127,10 @@
           [now later] (split-with #(= (-> objs first :name) (% :name)) objs)
           selected (first now)]
       (.write out (byte-array (:seq selected)))
-      (let [pos (-> out .getChannel .position)]
+      (let [attr-no-pos (-> out .getChannel .position)]
         (.write out (byte-array 8)) ; placeholder for no of attr
-        #(merge-attr (map :next now) (map :prev later) pos 0 acc out)))
-    acc))
+        #(merge-attr (map :next now) (map :prev later) attr-no-pos 0 attr-no-acc out)))
+    attr-no-acc))
 
 
 
@@ -143,18 +139,18 @@
   1. Create files from input file paths and sort them, latest first
   2. Create object iterators from input files
   3. Use trampoline to keep iterating until the sequences are all done
-  4. Write back attribute nos from updates received after iteration"
+  4. Write back attribute nos from attr-no-acc received after iteration"
 
   (let [files (->> inputs (map file) (sort-by #(.lastModified %)) reverse)]
     (spit output "")
     (let
-      [updates
+      [attr-no-acc
       (with-open [out (java.io.FileOutputStream. output )]
         (let [iters (map (comp obj-iter byte-seq input-stream) files)]
           (trampoline (merge-obj iters [] out))))]
       (with-open [out (java.io.RandomAccessFile. output "rw")]
-        (doseq [[pos attr-no] updates]
-          (.seek out pos)
+        (doseq [[attr-no-pos attr-no] attr-no-acc]
+          (.seek out attr-no-pos)
           (.write out (int->bytes attr-no)))))))
 
 
@@ -251,34 +247,3 @@
        (take-while (comp not nil?))
        (map :obj)))
 
-
-
-(defn mill-attr [out]
-  (do
-    (doto out
-      (.write (int->bytes (count "mill-attr")))
-      (.write (string->bytes "mill-attr"))
-      (.write (int->bytes 1000000)))
-    (doseq [i (range 1000000)]
-      (let [k (str "key-" i)
-            v (str "val-" i)]
-        (doto out
-          (.write (int->bytes (count k)))
-          (.write (string->bytes k))
-          (.write (int->bytes (count v)))
-          (.write (string->bytes v)))))))
-
-(defn test-os [f]
-  (with-open [out (java.io.FileOutputStream. f)]
-    (let [c (.getChannel out)]
-      (.write out (string->bytes "Foolhardy"))
-      (with-open [out2 (java.io.FileOutputStream. f)]
-        (do
-          ;(.position (.getChannel out2) 4)
-          ;(.write out2 (byte \c))
-          )
-      (.write out (byte \0))))))
-
-
-
-(reverse (sort-by #(.lastModified %) (map file ["resources/data/table2" "resources/data/table1" "resources/data/table3" "/tmp/see"])))
