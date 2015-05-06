@@ -83,9 +83,9 @@
 
 (declare merge-obj)
 
-(defn merge-attr [iters obj-iters acc out]
+(defn merge-attr [iters obj-iters pos attr-no out]
   "Takes a sequence of iterators, iters pointing to each object's attribute list and
-  an output stream, out. obj-iters and acc serve as accumulators. The steps are:
+  an output stream, out. pos marks the position of no of attributes and attr-no its value:
   1. Move all iterators forward.
     1.1 Remove the iterators that have reached the end of their sequence
     1.2 Seggregate the ones that have passed on to the next object
@@ -99,14 +99,19 @@
       (let [sorted (sort-by :key attrs)
             [now later] (split-with #(= (-> sorted first :key) (% :key)) sorted)
             selected (first now)]
+        (.write out (byte-array (:seq selected)))
         #(merge-attr
           (concat (map :next now) (map :prev later))
           (concat obj-iters (map :prev objs))
-          (conj acc selected)
+          pos
+          (inc attr-no)
           out))
       (do
-        (.write out (int->bytes (count acc)))
-        (doseq [a acc] (.write out (byte-array (:seq a))))
+        (let [chan (.getChannel out)
+              new-pos (.position chan)]
+          (.position chan pos)
+          (.write out (int->bytes attr-no))
+          (.position chan new-pos))
         #(merge-obj (concat obj-iters (map :prev objs)) out)))))
 
 
@@ -126,7 +131,9 @@
           [now later] (split-with #(= (-> objs first :name) (% :name)) objs)
           selected (first now)]
       (.write out (byte-array (:seq selected)))
-      #(merge-attr (map :next now) (map :prev later) [] out))))
+      (let [pos (-> out .getChannel .position)]
+        (.write out (byte-array 8)) ; placeholder for no of attr
+        #(merge-attr (map :next now) (map :prev later) pos 0 out)))))
 
 
 
@@ -249,3 +256,19 @@
           (.write (string->bytes k))
           (.write (int->bytes (count v)))
           (.write (string->bytes v)))))))
+
+(defn test-os [f]
+  (with-open [out (java.io.FileOutputStream. f)]
+    (let [c (.getChannel out)]
+      (.write out (string->bytes "Foolhardy"))
+      (with-open [out2 (java.io.FileOutputStream. f)]
+        (do
+          ;(.position (.getChannel out2) 4)
+          ;(.write out2 (byte \c))
+          )
+      (.write out (byte \0))))))
+
+
+
+(test-os "/tmp/see")
+
